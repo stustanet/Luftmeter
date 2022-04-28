@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name "OPV")(type "KiCad")(uri "${KIPRJMOD}/OPV.kicad_sym")(options "")(descr ""))
+  (lib (name "sensors")(type "KiCad")(uri "${KIPRJMOD}/sensors.kicad_sym")(options "")(descr ""))
+)

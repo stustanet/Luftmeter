@@ -1,0 +1,6 @@
+(fp_lib_table
+  (lib (name "sensirion")(type "KiCad")(uri "${KIPRJMOD}/sensirion.pretty")(options "")(descr ""))
+  (lib (name "slots")(type "KiCad")(uri "${KIPRJMOD}/slots.pretty")(options "")(descr ""))
+  (lib (name "spec_sensors")(type "KiCad")(uri "${KIPRJMOD}/spec_sensors.pretty")(options "")(descr ""))
+  (lib (name "TE_baro_sens")(type "KiCad")(uri "${KIPRJMOD}/TE_baro_sens.pretty")(options "")(descr ""))
+)
