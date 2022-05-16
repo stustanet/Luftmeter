@@ -13,6 +13,7 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
+#include <ESP32Time.h>
 
 // use first channel of 16 channels (started from zero)
 #define LEDC_CHANNEL_0     0
@@ -41,6 +42,8 @@ void ads1119_set_channel(uint8_t chan);
 void ads1119_powerdown(void);
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels);
+
+ESP32Time rtc;
 
 
 #ifdef AVAIL_SCD30
@@ -95,6 +98,8 @@ void setup() {
   ledcWrite(LEDC_CHANNEL_0,5000);
 
   #ifdef ADS1119_AVAIL
+  ads1119_set_channel(0);
+  
   ads1119_start_conversion();
   #endif
 
@@ -133,21 +138,31 @@ void setup() {
 
 void loop() {
 
-#ifdef AVAIL_SCD30
   static int i = 1995;
   int n = 0;
   int co2 = 0;
+  float rH_co2 = 0;
+  float rH_hdc = 0;
+  float T_co2 = 0;
+  float T_hdc = 0;
+  float T_baro = 0;
+  float p_baro = 0;
+  int adc = 0;
+
+#ifdef AVAIL_SCD30
 
   if (airSensor.dataAvailable())
   {
     co2 = airSensor.getCO2();
+    rH_co2 = airSensor.getHumidity();
+    T_co2 = airSensor.getTemperature();
 
     Serial.print("CO2: ");
     Serial.print(co2);
     Serial.print("ppm, rH: ");
-    Serial.print(airSensor.getHumidity());
+    Serial.print(rH_co2);
     Serial.print("%, Temperatur (CO2): ");
-    Serial.print(airSensor.getTemperature());
+    Serial.print(T_co2);
     Serial.println("°C");
 
     #ifdef RGB_LEDS_AVAILABLE
@@ -184,38 +199,57 @@ void loop() {
 #endif
 
 #ifdef HDC2080
+    rH_hdc = readHumidity_hdc();
+    T_hdc = readTemp_hdc();
+
     Serial.print("rel. Feuchtigkeit: ");
-    Serial.print(readHumidity_hdc());
+    Serial.print(rH_hdc);
     Serial.println("%");
     Serial.print("Temperatur (humi): ");
-    Serial.print(readTemp_hdc());
+    Serial.print(T_hdc);
     Serial.println("°C");
 #endif
 
 #ifdef BAROSENSOR
+
+    p_baro = BaroSensor.getPressure();
+    T_baro = BaroSensor.getTemperature();
+
     Serial.print("Temperatur (baro): ");
-    Serial.print(BaroSensor.getTemperature());
+    Serial.print(T_baro);
     Serial.println("°C");
   
     Serial.print("Luftdruck: ");
-    Serial.print(BaroSensor.getPressure());
+    Serial.print(p_baro);
     Serial.println("hPa");
 #endif
 
 
+
+
     #ifdef ADS1119_AVAIL
+    adc = ads1119_read_data();
     Serial.print("NO2 raw data: ");
-    Serial.print(ads1119_read_data());
+    Serial.print(adc);
     Serial.println(" Arb");
     #endif
 
-
-    Serial.println();
+    Serial.print("Seconds from start: ");
+    Serial.println(rtc.getEpoch());
     Serial.println();
 
 #ifdef SDCARD_AVAIL
     File file = SD.open("/log.txt", FILE_APPEND);
-    file.print("lol\n");
+    file.print(rtc.getEpoch()); file.print(";");
+    file.print(adc); file.print(";");
+    file.print(co2); file.print(";");
+    file.print(T_co2); file.print(";");
+    file.print(rH_co2); file.print(";");
+    file.print(T_hdc); file.print(";");
+    file.print(rH_hdc); file.print(";");
+    file.print(T_baro); file.print(";");
+    file.print(p_baro); //file.print(";");
+    file.print("\n");
     file.close();
 #endif
 
@@ -239,7 +273,7 @@ void loop() {
   ads1119_start_conversion();
   #endif
 
-  delay(1000);
+  delay(100);
 
 }
 
@@ -310,7 +344,7 @@ float readTemp_hdc(void)
 void ads1119_write_reg(uint8_t reg, uint8_t data)
 {
   Wire.beginTransmission(ADS1119_ADDR);    // Open Device
-  Wire.write(0x40+4*reg);            // command register
+  Wire.write(0x40);            // command register
   Wire.write(data);           // Write data to register 
   Wire.endTransmission(1);       // Relinquish bus control
 
@@ -342,18 +376,24 @@ int16_t ads1119_read_data(void)
   Wire.write(0x10);            // command register
   Wire.endTransmission(0);
   //delay(2);
-  uint8_t dat0=0;          // holds byte of read data
-  uint8_t dat1=0;          // holds byte of read data
+  union {
+    uint8_t d[2];
+    int16_t result;
+    } dat;
+  dat.d[0]=0;          // holds byte of read data
+  dat.d[1]=0;          // holds byte of read data
 
-  Wire.requestFrom(0x40, 2, 1);     // Request 2 byte from open register
+  Wire.requestFrom(ADS1119_ADDR, 2, 1);     // Request 2 byte from open register
   //Wire.endTransmission();       // Relinquish bus control
   
   if (1 <= Wire.available())
   {
-    dat0 = (Wire.read());      // Read byte
-    dat1 = (Wire.read());      // Read byte
-  } 
-  return (int16_t)((((uint16_t)dat0)<<8)|dat1);
+    dat.d[1] = Wire.read();      // Read byte
+    dat.d[0] = Wire.read();      // Read byte
+  }
+  Wire.read();
+  Wire.read();
+  return dat.result;
 
 }
 
